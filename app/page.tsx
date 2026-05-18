@@ -5,9 +5,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Banknote,
-  Bell,
   Calculator,
-  CalendarClock,
   CreditCard,
   FileDown,
   Goal,
@@ -16,12 +14,12 @@ import {
   Paperclip,
   Plus,
   Settings,
-  ShieldCheck,
+  Trash2,
   TrendingUp,
   Upload,
-  Users,
   Wallet,
 } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
   Area,
   AreaChart,
@@ -34,9 +32,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import { useMemo, useRef, useState } from "react"
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -74,86 +70,90 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
-const cashFlow = [
-  { day: "01", income: 4200, expense: 2300, balance: 1900 },
-  { day: "05", income: 1200, expense: 3100, balance: 0 },
-  { day: "10", income: 7000, expense: 4200, balance: 2800 },
-  { day: "15", income: 1500, expense: 5100, balance: -800 },
-  { day: "20", income: 2200, expense: 2900, balance: 500 },
-  { day: "25", income: 3300, expense: 3600, balance: 200 },
-  { day: "30", income: 5200, expense: 4100, balance: 1300 },
-]
+type Section =
+  | "dashboard"
+  | "transacoes"
+  | "orcamento"
+  | "cartoes"
+  | "metas"
+  | "relatorios"
+  | "planejamento"
+  | "patrimonio"
+  | "configuracoes"
 
-const categories = [
-  { name: "Moradia", value: 3200, fill: "var(--chart-1)" },
-  { name: "Mercado", value: 1850, fill: "var(--chart-2)" },
-  { name: "Transporte", value: 920, fill: "var(--chart-3)" },
-  { name: "Lazer", value: 740, fill: "var(--chart-4)" },
-]
+type Transaction = {
+  id: string
+  description: string
+  category: string
+  account: string
+  amount: number
+  recurring: boolean
+}
 
-const initialTransactions = [
-  {
-    id: "1",
-    description: "Salario",
-    category: "Receita",
-    account: "Conta principal",
-    amount: 12400,
-    status: "Conciliado",
+type AppState = {
+  projectName: string
+  month: string
+  currentUser: string
+  invitedEmail: string
+  notifications: boolean
+  openFinance: boolean
+  dashboardCards: {
+    balance: boolean
+    income: boolean
+    expense: boolean
+    alerts: boolean
+  }
+  categories: string[]
+  accounts: { name: string; balance: number }[]
+  budgets: { category: string; limit: number; alert: number }[]
+  transactions: Transaction[]
+  cards: { name: string; limit: number; invoice: number; dueDay: number }[]
+  goals: { name: string; target: number; current: number }[]
+  assets: { name: string; value: number }[]
+  debts: { name: string; value: number }[]
+}
+
+const initialState: AppState = {
+  projectName: "Economy",
+  month: new Date().toISOString().slice(0, 7),
+  currentUser: "Dono",
+  invitedEmail: "",
+  notifications: true,
+  openFinance: false,
+  dashboardCards: {
+    balance: true,
+    income: true,
+    expense: true,
+    alerts: true,
   },
-  {
-    id: "2",
-    description: "Aluguel",
-    category: "Moradia",
-    account: "Nubank",
-    amount: -2850,
-    status: "Recorrente",
-  },
-  {
-    id: "3",
-    description: "Mercado",
-    category: "Alimentacao",
-    account: "Cartao casal",
-    amount: -421.9,
-    status: "IA",
-  },
-  {
-    id: "4",
-    description: "ETF mensal",
-    category: "Investimento",
-    account: "Corretora",
-    amount: -1200,
-    status: "Agendado",
-  },
-  {
-    id: "5",
-    description: "Freela",
-    category: "Receita",
-    account: "Conta PJ",
-    amount: 3100,
-    status: "Pendente",
-  },
-]
+  categories: ["Receita", "Moradia", "Mercado", "Transporte", "Lazer"],
+  accounts: [
+    { name: "Conta principal", balance: 0 },
+    { name: "Cartao casal", balance: 0 },
+  ],
+  budgets: [
+    { category: "Moradia", limit: 3000, alert: 80 },
+    { category: "Mercado", limit: 1600, alert: 80 },
+  ],
+  transactions: [],
+  cards: [{ name: "Cartao principal", limit: 5000, invoice: 0, dueDay: 10 }],
+  goals: [{ name: "Reserva", target: 10000, current: 0 }],
+  assets: [],
+  debts: [],
+}
 
 const navItems = [
-  ["Dashboard", "transacoes", Wallet],
+  ["Dashboard", "dashboard", Wallet],
   ["Transacoes", "transacoes", Banknote],
   ["Orcamento", "orcamento", TrendingUp],
   ["Cartoes", "cartoes", CreditCard],
   ["Metas", "metas", Goal],
   ["Relatorios", "relatorios", FileDown],
   ["Planejamento", "planejamento", Calculator],
-  ["Patrimonio", "transacoes", Landmark],
-  ["Configuracoes", "transacoes", Settings],
+  ["Patrimonio", "patrimonio", Landmark],
+  ["Configuracoes", "configuracoes", Settings],
 ] as const
-
-const budgets = [
-  ["Moradia", 74, "R$ 3.200 / R$ 4.300"],
-  ["Mercado", 92, "R$ 1.850 / R$ 2.000"],
-  ["Transporte", 41, "R$ 920 / R$ 2.200"],
-  ["Lazer", 64, "R$ 740 / R$ 1.150"],
-]
 
 const chartConfig = {
   income: { label: "Receitas", color: "var(--chart-2)" },
@@ -164,38 +164,105 @@ const chartConfig = {
 
 export default function Page() {
   const formRef = useRef<HTMLDivElement>(null)
-  const [activeTab, setActiveTab] = useState("transacoes")
-  const [transactions, setTransactions] = useState(initialTransactions)
+  const [section, setSection] = useState<Section>("dashboard")
+  const [state, setState] = useState<AppState>(() => {
+    if (typeof window === "undefined") {
+      return initialState
+    }
+
+    const saved = window.localStorage.getItem("economy-state")
+    return saved ? { ...initialState, ...JSON.parse(saved) } : initialState
+  })
   const [editId, setEditId] = useState<string | null>(null)
   const [description, setDescription] = useState("")
   const [amount, setAmount] = useState("")
-  const [category, setCategory] = useState("")
+  const [category, setCategory] = useState(initialState.categories[0])
+  const [account, setAccount] = useState(initialState.accounts[0].name)
   const [kind, setKind] = useState("expense")
   const [recurring, setRecurring] = useState(false)
+  const [newCategory, setNewCategory] = useState("")
+  const [newAccount, setNewAccount] = useState("")
 
-  const formTitle = editId ? "Editar lancamento" : "Lancamento rapido"
-  const monthlyIncome = useMemo(
-    () =>
-      transactions
-        .filter((transaction) => transaction.amount > 0)
-        .reduce((total, transaction) => total + transaction.amount, 0),
-    [transactions]
-  )
-  const monthlyExpense = useMemo(
-    () =>
-      Math.abs(
-        transactions
-          .filter((transaction) => transaction.amount < 0)
-          .reduce((total, transaction) => total + transaction.amount, 0)
-      ),
-    [transactions]
-  )
+  useEffect(() => {
+    window.localStorage.setItem("economy-state", JSON.stringify(state))
+  }, [state])
+
+  const totals = useMemo(() => {
+    const income = state.transactions
+      .filter((transaction) => transaction.amount > 0)
+      .reduce((total, transaction) => total + transaction.amount, 0)
+    const expense = Math.abs(
+      state.transactions
+        .filter((transaction) => transaction.amount < 0)
+        .reduce((total, transaction) => total + transaction.amount, 0)
+    )
+    const assets = state.assets.reduce((total, item) => total + item.value, 0)
+    const debts = state.debts.reduce((total, item) => total + item.value, 0)
+    const accounts = state.accounts.reduce((total, item) => total + item.balance, 0)
+
+    return {
+      income,
+      expense,
+      balance: accounts + income - expense + assets - debts,
+    }
+  }, [state])
+
+  const categoryChart = useMemo(() => {
+    return state.categories
+      .map((name, index) => ({
+        name,
+        value: Math.abs(
+          state.transactions
+            .filter(
+              (transaction) =>
+                transaction.category === name && transaction.amount < 0
+            )
+            .reduce((total, transaction) => total + transaction.amount, 0)
+        ),
+        fill: `var(--chart-${(index % 5) + 1})`,
+      }))
+      .filter((item) => item.value > 0)
+  }, [state])
+
+  const cashFlow = useMemo(() => {
+    return state.transactions
+      .slice()
+      .reverse()
+      .reduce<
+        {
+          day: string
+          income: number
+          expense: number
+          balance: number
+        }[]
+      >((items, transaction, index) => {
+        const previousBalance = items.at(-1)?.balance ?? 0
+        const balance = previousBalance + transaction.amount
+        items.push({
+          day: String(index + 1).padStart(2, "0"),
+          income: transaction.amount > 0 ? transaction.amount : 0,
+          expense: transaction.amount < 0 ? Math.abs(transaction.amount) : 0,
+          balance,
+        })
+        return items
+      }, [])
+  }, [state.transactions])
+
+  function updateState(patch: Partial<AppState>) {
+    setState((current) => ({ ...current, ...patch }))
+  }
+
+  function openSection(next: Section) {
+    setSection(next)
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
 
   function resetForm() {
     setEditId(null)
     setDescription("")
     setAmount("")
-    setCategory("")
+    setCategory(state.categories[0] ?? "")
+    setAccount(state.accounts[0]?.name ?? "")
     setKind("expense")
     setRecurring(false)
   }
@@ -203,53 +270,71 @@ export default function Page() {
   function saveTransaction() {
     const numericAmount = Number(amount.replace(",", "."))
 
-    if (!description || !category || !Number.isFinite(numericAmount)) {
+    if (!description || !category || !account || !Number.isFinite(numericAmount)) {
       return
     }
 
     const signedAmount =
       kind === "income" ? Math.abs(numericAmount) : -Math.abs(numericAmount)
 
-    if (editId) {
-      setTransactions((current) =>
-        current.map((transaction) =>
-          transaction.id === editId
-            ? {
-                ...transaction,
-                description,
-                category,
-                amount: signedAmount,
-                status: recurring ? "Recorrente" : "Manual",
-              }
-            : transaction
-        )
-      )
-    } else {
-      setTransactions((current) => [
-        {
-          id: crypto.randomUUID(),
-          description,
-          category,
-          account: "Conta principal",
-          amount: signedAmount,
-          status: recurring ? "Recorrente" : "Manual",
-        },
-        ...current,
-      ])
+    const nextTransaction = {
+      id: editId ?? crypto.randomUUID(),
+      description,
+      category,
+      account,
+      amount: signedAmount,
+      recurring,
     }
+
+    setState((current) => ({
+      ...current,
+      transactions: editId
+        ? current.transactions.map((transaction) =>
+            transaction.id === editId ? nextTransaction : transaction
+          )
+        : [nextTransaction, ...current.transactions],
+    }))
 
     resetForm()
   }
 
-  function editTransaction(transaction: (typeof initialTransactions)[number]) {
-    setActiveTab("transacoes")
+  function editTransaction(transaction: Transaction) {
+    setSection("transacoes")
     setEditId(transaction.id)
     setDescription(transaction.description)
     setAmount(String(Math.abs(transaction.amount)))
-    setCategory(transaction.category.toLowerCase())
+    setCategory(transaction.category)
+    setAccount(transaction.account)
     setKind(transaction.amount > 0 ? "income" : "expense")
-    setRecurring(transaction.status === "Recorrente")
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+    setRecurring(transaction.recurring)
+    requestAnimationFrame(() =>
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+    )
+  }
+
+  function removeTransaction(id: string) {
+    setState((current) => ({
+      ...current,
+      transactions: current.transactions.filter((transaction) => transaction.id !== id),
+    }))
+  }
+
+  function addCategory() {
+    const value = newCategory.trim()
+    if (!value || state.categories.includes(value)) {
+      return
+    }
+    updateState({ categories: [...state.categories, value] })
+    setNewCategory("")
+  }
+
+  function addAccount() {
+    const value = newAccount.trim()
+    if (!value || state.accounts.some((item) => item.name === value)) {
+      return
+    }
+    updateState({ accounts: [...state.accounts, { name: value, balance: 0 }] })
+    setNewAccount("")
   }
 
   function formatCurrency(value: number) {
@@ -269,20 +354,20 @@ export default function Page() {
                 <Wallet />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">Economy</p>
+                <p className="truncate text-sm font-semibold">{state.projectName}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  Projeto familiar
+                  workspace local
                 </p>
               </div>
             </div>
             <ScrollArea className="flex-1">
               <nav className="flex flex-col gap-1 p-3 text-sm">
-                {navItems.map(([label, tab, Icon]) => (
+                {navItems.map(([label, value, Icon]) => (
                   <Button
-                    key={label}
-                    variant={activeTab === tab ? "secondary" : "ghost"}
+                    key={value}
+                    variant={section === value ? "secondary" : "ghost"}
                     className="justify-start"
-                    onClick={() => setActiveTab(tab)}
+                    onClick={() => openSection(value)}
                   >
                     <Icon data-icon="inline-start" />
                     {label}
@@ -293,57 +378,49 @@ export default function Page() {
             <div className="border-t p-3">
               <div className="flex items-center gap-3">
                 <Avatar>
-                  <AvatarFallback>DR</AvatarFallback>
+                  <AvatarFallback>
+                    {state.currentUser.slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">Dono</p>
+                  <p className="truncate text-sm font-medium">{state.currentUser}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    isolado por RLS
+                    dados no navegador
                   </p>
                 </div>
-                <Badge variant="secondary">Pro</Badge>
               </div>
             </div>
           </div>
         </aside>
 
         <section className="min-w-0">
-          <header className="sticky top-0 border-b bg-background/95 backdrop-blur">
+          <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur">
             <div className="flex h-14 items-center justify-between gap-3 px-4 lg:px-6">
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="icon" className="lg:hidden">
                   <Menu />
                 </Button>
                 <div>
-                  <h1 className="text-base font-semibold">
-                    Dashboard financeiro
-                  </h1>
-                  <p className="text-xs text-muted-foreground">Maio 2026</p>
+                  <h1 className="text-base font-semibold">{titleFor(section)}</h1>
+                  <p className="text-xs text-muted-foreground">{state.month}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Select defaultValue="familia">
-                  <SelectTrigger className="w-[148px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="familia">Familia</SelectItem>
-                      <SelectItem value="pj">PJ</SelectItem>
-                      <SelectItem value="pessoal">Pessoal</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                <Button variant="outline" size="icon">
-                  <Bell />
-                </Button>
+                <Input
+                  className="hidden w-[150px] md:block"
+                  type="month"
+                  value={state.month}
+                  onChange={(event) => updateState({ month: event.target.value })}
+                />
                 <Button
                   onClick={() => {
-                    setActiveTab("transacoes")
-                    formRef.current?.scrollIntoView({
-                      behavior: "smooth",
-                      block: "center",
-                    })
+                    openSection("transacoes")
+                    requestAnimationFrame(() =>
+                      formRef.current?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center",
+                      })
+                    )
                   }}
                 >
                   <Plus data-icon="inline-start" />
@@ -351,477 +428,706 @@ export default function Page() {
                 </Button>
               </div>
             </div>
+            <ScrollArea className="border-t lg:hidden">
+              <nav className="flex gap-1 p-2">
+                {navItems.map(([label, value, Icon]) => (
+                  <Button
+                    key={value}
+                    variant={section === value ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => openSection(value)}
+                  >
+                    <Icon data-icon="inline-start" />
+                    {label}
+                  </Button>
+                ))}
+              </nav>
+            </ScrollArea>
           </header>
 
           <div className="flex flex-col gap-5 p-4 lg:p-6">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <Metric
-                title="Saldo consolidado"
-                value="R$ 84.920,44"
-                delta="+8,4%"
-                icon={Wallet}
+            {section === "dashboard" ? (
+              <Dashboard
+                state={state}
+                totals={totals}
+                cashFlow={cashFlow}
+                categoryChart={categoryChart}
+                formatCurrency={formatCurrency}
               />
-              <Metric
-                title="Receitas mes"
-                value={formatCurrency(monthlyIncome)}
-                delta="+12,1%"
-                icon={ArrowUpRight}
+            ) : null}
+
+            {section === "transacoes" ? (
+              <Transactions
+                state={state}
+                formRef={formRef}
+                editId={editId}
+                description={description}
+                amount={amount}
+                category={category}
+                account={account}
+                kind={kind}
+                recurring={recurring}
+                setDescription={setDescription}
+                setAmount={setAmount}
+                setCategory={setCategory}
+                setAccount={setAccount}
+                setKind={setKind}
+                setRecurring={setRecurring}
+                saveTransaction={saveTransaction}
+                resetForm={resetForm}
+                editTransaction={editTransaction}
+                removeTransaction={removeTransaction}
+                formatCurrency={formatCurrency}
               />
-              <Metric
-                title="Despesas mes"
-                value={formatCurrency(monthlyExpense)}
-                delta="-3,8%"
-                icon={ArrowDownRight}
+            ) : null}
+
+            {section === "orcamento" ? (
+              <Budget state={state} updateState={updateState} totals={totals} />
+            ) : null}
+
+            {section === "cartoes" ? (
+              <SimpleCollection
+                title="Cartoes"
+                description="Controle de fatura, limite e vencimento"
+                rows={state.cards.map((card) => [
+                  card.name,
+                  formatCurrency(card.invoice),
+                  `${Math.round((card.invoice / Math.max(card.limit, 1)) * 100)}% limite`,
+                  `vence dia ${card.dueDay}`,
+                ])}
               />
-              <Metric
-                title="Pendencias"
-                value="7"
-                delta="3 criticas"
-                icon={AlertCircle}
+            ) : null}
+
+            {section === "metas" ? (
+              <Goals state={state} updateState={updateState} formatCurrency={formatCurrency} />
+            ) : null}
+
+            {section === "relatorios" ? (
+              <Reports
+                state={state}
+                totals={totals}
+                categoryChart={categoryChart}
+                cashFlow={cashFlow}
+                formatCurrency={formatCurrency}
               />
-            </div>
+            ) : null}
 
-            <div className="grid gap-5 xl:grid-cols-[1.5fr_1fr]">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Fluxo de caixa</CardTitle>
-                  <CardDescription>Janela 30/90 dias</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <ChartContainer
-                    config={chartConfig}
-                    className="h-[280px] w-full"
-                  >
-                    <AreaChart data={cashFlow}>
-                      <CartesianGrid vertical={false} />
-                      <XAxis dataKey="day" tickLine={false} axisLine={false} />
-                      <YAxis tickLine={false} axisLine={false} width={48} />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Area
-                        dataKey="income"
-                        type="monotone"
-                        stroke="var(--color-income)"
-                        fill="var(--color-income)"
-                        fillOpacity={0.18}
-                      />
-                      <Area
-                        dataKey="expense"
-                        type="monotone"
-                        stroke="var(--color-expense)"
-                        fill="var(--color-expense)"
-                        fillOpacity={0.12}
-                      />
-                    </AreaChart>
-                  </ChartContainer>
-                </CardContent>
-              </Card>
+            {section === "planejamento" ? <Planning totals={totals} /> : null}
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Alertas</CardTitle>
-                  <CardDescription>
-                    Limites, faturas, recorrencias
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  <Alert>
-                    <AlertCircle />
-                    <AlertTitle>Mercado em 92%</AlertTitle>
-                    <AlertDescription>Limite quase atingido.</AlertDescription>
-                  </Alert>
-                  <Alert>
-                    <CalendarClock />
-                    <AlertTitle>Fatura fecha em 3 dias</AlertTitle>
-                    <AlertDescription>R$ 4.812,90 previstos.</AlertDescription>
-                  </Alert>
-                  <Alert>
-                    <ShieldCheck />
-                    <AlertTitle>Convite pendente</AlertTitle>
-                    <AlertDescription>
-                      Usuario casal aguarda aceite.
-                    </AlertDescription>
-                  </Alert>
-                </CardContent>
-              </Card>
-            </div>
+            {section === "patrimonio" ? (
+              <Wealth
+                state={state}
+                updateState={updateState}
+                formatCurrency={formatCurrency}
+              />
+            ) : null}
 
-            <Tabs
-              value={activeTab}
-              onValueChange={setActiveTab}
-              className="flex flex-col gap-4"
-            >
-              <TabsList className="w-full justify-start overflow-x-auto">
-                <TabsTrigger value="transacoes">Transacoes</TabsTrigger>
-                <TabsTrigger value="orcamento">Orcamento</TabsTrigger>
-                <TabsTrigger value="cartoes">Cartoes</TabsTrigger>
-                <TabsTrigger value="metas">Metas</TabsTrigger>
-                <TabsTrigger value="relatorios">Relatorios</TabsTrigger>
-                <TabsTrigger value="planejamento">Planejamento</TabsTrigger>
-              </TabsList>
-
-              <TabsContent
-                value="transacoes"
-                className="grid gap-5 xl:grid-cols-[1.3fr_0.7fr]"
-              >
-                <Card>
-                  <CardHeader className="flex-row items-center justify-between gap-3">
-                    <div>
-                      <CardTitle>Ultimas transacoes</CardTitle>
-                      <CardDescription>Manual, OFX, CSV, IA</CardDescription>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline">
-                        <Upload data-icon="inline-start" />
-                        OFX/CSV
-                      </Button>
-                      <Button variant="outline">
-                        <Paperclip data-icon="inline-start" />
-                        Anexo
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Descricao</TableHead>
-                          <TableHead>Categoria</TableHead>
-                          <TableHead>Conta</TableHead>
-                          <TableHead>Valor</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Acao</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {transactions.map((transaction) => (
-                          <TableRow key={transaction.id}>
-                            <TableCell>{transaction.description}</TableCell>
-                            <TableCell>{transaction.category}</TableCell>
-                            <TableCell>{transaction.account}</TableCell>
-                            <TableCell>
-                              {formatCurrency(transaction.amount)}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline">
-                                {transaction.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => editTransaction(transaction)}
-                              >
-                                Editar
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-
-                <Card ref={formRef}>
-                  <CardHeader>
-                    <CardTitle>{formTitle}</CardTitle>
-                    <CardDescription>Receita ou despesa</CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-3">
-                    <Input
-                      placeholder="Descricao"
-                      value={description}
-                      onChange={(event) => setDescription(event.target.value)}
-                    />
-                    <Input
-                      placeholder="Valor"
-                      value={amount}
-                      onChange={(event) => setAmount(event.target.value)}
-                    />
-                    <Select value={kind} onValueChange={setKind}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectItem value="expense">Despesa</SelectItem>
-                          <SelectItem value="income">Receita</SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    <Select value={category} onValueChange={setCategory}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Categoria" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          <SelectItem value="moradia">Moradia</SelectItem>
-                          <SelectItem value="receita">Receita</SelectItem>
-                          <SelectItem value="mercado">Mercado</SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                    <div className="flex items-center justify-between border p-3">
-                      <span className="text-sm">Recorrente</span>
-                      <Switch
-                        checked={recurring}
-                        onCheckedChange={setRecurring}
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button onClick={saveTransaction}>Salvar</Button>
-                      {editId ? (
-                        <Button variant="outline" onClick={resetForm}>
-                          Cancelar
-                        </Button>
-                      ) : null}
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent
-                value="orcamento"
-                className="grid gap-5 xl:grid-cols-[1fr_1fr]"
-              >
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Limites por categoria</CardTitle>
-                    <CardDescription>Progresso do mes</CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-4">
-                    {budgets.map(([label, value, caption]) => (
-                      <div
-                        key={label as string}
-                        className="flex flex-col gap-2"
-                      >
-                        <div className="flex justify-between gap-3 text-sm">
-                          <span>{label as string}</span>
-                          <span className="text-muted-foreground">
-                            {caption as string}
-                          </span>
-                        </div>
-                        <Progress value={value as number} />
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Gastos por categoria</CardTitle>
-                    <CardDescription>Periodo customizavel</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ChartContainer
-                      config={chartConfig}
-                      className="h-[260px] w-full"
-                    >
-                      <PieChart>
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Pie
-                          data={categories}
-                          dataKey="value"
-                          nameKey="name"
-                          innerRadius={58}
-                        >
-                          {categories.map((item) => (
-                            <Cell key={item.name} fill={item.fill} />
-                          ))}
-                        </Pie>
-                      </PieChart>
-                    </ChartContainer>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent
-                value="cartoes"
-                className="grid gap-5 md:grid-cols-3"
-              >
-                {["Nubank", "Itau Black", "Inter"].map((card, index) => (
-                  <Card key={card}>
-                    <CardHeader>
-                      <CardTitle>{card}</CardTitle>
-                      <CardDescription>
-                        Vence dia {10 + index * 5}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-col gap-3">
-                      <p className="text-2xl font-semibold">
-                        R$ {(4812 + index * 730).toLocaleString("pt-BR")}
-                      </p>
-                      <Progress value={46 + index * 12} />
-                      <div className="flex justify-between text-sm text-muted-foreground">
-                        <span>Atual vs fechada</span>
-                        <span>{46 + index * 12}% limite</span>
-                      </div>
-                      <Separator />
-                      <Badge variant="secondary">
-                        Parcelas abertas: {index + 2}
-                      </Badge>
-                    </CardContent>
-                  </Card>
-                ))}
-              </TabsContent>
-
-              <TabsContent value="metas" className="grid gap-5 md:grid-cols-3">
-                {[
-                  ["Reserva", 68, "R$ 34.000 / R$ 50.000"],
-                  ["Entrada imovel", 22, "R$ 44.000 / R$ 200.000"],
-                  ["Viagem", 81, "R$ 8.100 / R$ 10.000"],
-                ].map(([name, progress, caption]) => (
-                  <Card key={name as string}>
-                    <CardHeader>
-                      <CardTitle>{name as string}</CardTitle>
-                      <CardDescription>{caption as string}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-col gap-3">
-                      <Progress value={progress as number} />
-                      <p className="text-sm text-muted-foreground">
-                        Conclusao projetada em 7 meses.
-                      </p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </TabsContent>
-
-              <TabsContent
-                value="relatorios"
-                className="grid gap-5 xl:grid-cols-[1fr_1fr]"
-              >
-                <Card>
-                  <CardHeader>
-                    <CardTitle>DRE pessoal</CardTitle>
-                    <CardDescription>Receitas, despesas, sobra</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <ChartContainer
-                      config={chartConfig}
-                      className="h-[260px] w-full"
-                    >
-                      <BarChart data={cashFlow}>
-                        <CartesianGrid vertical={false} />
-                        <XAxis
-                          dataKey="day"
-                          tickLine={false}
-                          axisLine={false}
-                        />
-                        <YAxis tickLine={false} axisLine={false} width={48} />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Bar dataKey="income" fill="var(--color-income)" />
-                        <Bar dataKey="expense" fill="var(--color-expense)" />
-                      </BarChart>
-                    </ChartContainer>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Exportacao</CardTitle>
-                    <CardDescription>PDF e Excel</CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-3">
-                    <Button variant="outline">
-                      <FileDown data-icon="inline-start" />
-                      Exportar PDF
-                    </Button>
-                    <Button variant="outline">
-                      <FileDown data-icon="inline-start" />
-                      Exportar Excel
-                    </Button>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent
-                value="planejamento"
-                className="grid gap-5 md:grid-cols-3"
-              >
-                {["Corte mensal", "Fluxo futuro", "Juros e financiamento"].map(
-                  (item) => (
-                    <Card key={item}>
-                      <CardHeader>
-                        <CardTitle>{item}</CardTitle>
-                        <CardDescription>Simulador anual</CardDescription>
-                      </CardHeader>
-                      <CardContent className="flex flex-col gap-3">
-                        <Input placeholder="Valor" />
-                        <Input placeholder="Prazo" />
-                        <Button variant="outline">
-                          <Calculator data-icon="inline-start" />
-                          Calcular
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  )
-                )}
-              </TabsContent>
-            </Tabs>
-
-            <div className="grid gap-5 lg:grid-cols-3">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Contas e patrimonio</CardTitle>
-                  <CardDescription>Bancos, investimentos, bens</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3 text-sm">
-                  <Row label="Contas bancarias" value="R$ 28.420,44" />
-                  <Row label="Investimentos" value="R$ 52.300,00" />
-                  <Row label="Bens" value="R$ 430.000,00" />
-                  <Row label="Dividas" value="- R$ 18.900,00" />
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Usuarios</CardTitle>
-                  <CardDescription>Projeto compartilhado</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarFallback>DR</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Dono</p>
-                      <p className="text-xs text-muted-foreground">owner</p>
-                    </div>
-                    <Badge>Ativo</Badge>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarFallback>CA</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">Convidado</p>
-                      <p className="text-xs text-muted-foreground">editor</p>
-                    </div>
-                    <Badge variant="outline">Pendente</Badge>
-                  </div>
-                  <Button variant="outline">
-                    <Users data-icon="inline-start" />
-                    Convidar usuario
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Configuracoes</CardTitle>
-                  <CardDescription>Categorias, alertas, plano</CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  <Row label="Categorias customizadas" value="23" />
-                  <Row label="Notificacoes" value="Ativas" />
-                  <Row label="Open Finance" value="Pendente" />
-                  <Row label="Plano" value="Pro mensal" />
-                </CardContent>
-              </Card>
-            </div>
+            {section === "configuracoes" ? (
+              <SettingsView
+                state={state}
+                updateState={updateState}
+                newCategory={newCategory}
+                newAccount={newAccount}
+                setNewCategory={setNewCategory}
+                setNewAccount={setNewAccount}
+                addCategory={addCategory}
+                addAccount={addAccount}
+                resetAll={() => setState(initialState)}
+              />
+            ) : null}
           </div>
         </section>
       </div>
     </main>
+  )
+}
+
+function Dashboard({
+  state,
+  totals,
+  cashFlow,
+  categoryChart,
+  formatCurrency,
+}: {
+  state: AppState
+  totals: { income: number; expense: number; balance: number }
+  cashFlow: { day: string; income: number; expense: number; balance: number }[]
+  categoryChart: { name: string; value: number; fill: string }[]
+  formatCurrency: (value: number) => string
+}) {
+  return (
+    <>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {state.dashboardCards.balance ? (
+          <Metric title="Saldo" value={formatCurrency(totals.balance)} delta="calculado" icon={Wallet} />
+        ) : null}
+        {state.dashboardCards.income ? (
+          <Metric title="Receitas" value={formatCurrency(totals.income)} delta="periodo" icon={ArrowUpRight} />
+        ) : null}
+        {state.dashboardCards.expense ? (
+          <Metric title="Despesas" value={formatCurrency(totals.expense)} delta="periodo" icon={ArrowDownRight} />
+        ) : null}
+        {state.dashboardCards.alerts ? (
+          <Metric title="Alertas" value={String(alertCount(state))} delta="orcamento" icon={AlertCircle} />
+        ) : null}
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[1.5fr_1fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Fluxo de caixa</CardTitle>
+            <CardDescription>Baseado nas transacoes lancadas</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer config={chartConfig} className="h-[280px] w-full">
+              <AreaChart data={cashFlow}>
+                <CartesianGrid vertical={false} />
+                <XAxis dataKey="day" tickLine={false} axisLine={false} />
+                <YAxis tickLine={false} axisLine={false} width={48} />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Area dataKey="balance" type="monotone" stroke="var(--color-balance)" fill="var(--color-balance)" fillOpacity={0.16} />
+              </AreaChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Gastos por categoria</CardTitle>
+            <CardDescription>Sem dados falsos</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {categoryChart.length ? (
+              <ChartContainer config={chartConfig} className="h-[280px] w-full">
+                <PieChart>
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Pie data={categoryChart} dataKey="value" nameKey="name" innerRadius={58}>
+                    {categoryChart.map((item) => (
+                      <Cell key={item.name} fill={item.fill} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ChartContainer>
+            ) : (
+              <EmptyText text="Sem despesas lancadas." />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </>
+  )
+}
+
+function Transactions({
+  state,
+  formRef,
+  editId,
+  description,
+  amount,
+  category,
+  account,
+  kind,
+  recurring,
+  setDescription,
+  setAmount,
+  setCategory,
+  setAccount,
+  setKind,
+  setRecurring,
+  saveTransaction,
+  resetForm,
+  editTransaction,
+  removeTransaction,
+  formatCurrency,
+}: {
+  state: AppState
+  formRef: React.RefObject<HTMLDivElement | null>
+  editId: string | null
+  description: string
+  amount: string
+  category: string
+  account: string
+  kind: string
+  recurring: boolean
+  setDescription: (value: string) => void
+  setAmount: (value: string) => void
+  setCategory: (value: string) => void
+  setAccount: (value: string) => void
+  setKind: (value: string) => void
+  setRecurring: (value: boolean) => void
+  saveTransaction: () => void
+  resetForm: () => void
+  editTransaction: (transaction: Transaction) => void
+  removeTransaction: (id: string) => void
+  formatCurrency: (value: number) => string
+}) {
+  return (
+    <div className="grid gap-5 xl:grid-cols-[1.35fr_0.65fr]">
+      <Card>
+        <CardHeader className="flex-row items-center justify-between gap-3">
+          <div>
+            <CardTitle>Transacoes</CardTitle>
+            <CardDescription>Crie, edite e remova lancamentos</CardDescription>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline">
+              <Upload data-icon="inline-start" />
+              OFX/CSV
+            </Button>
+            <Button variant="outline">
+              <Paperclip data-icon="inline-start" />
+              Anexo
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {state.transactions.length ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Descricao</TableHead>
+                  <TableHead>Categoria</TableHead>
+                  <TableHead>Conta</TableHead>
+                  <TableHead>Valor</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Acao</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {state.transactions.map((transaction) => (
+                  <TableRow key={transaction.id}>
+                    <TableCell>{transaction.description}</TableCell>
+                    <TableCell>{transaction.category}</TableCell>
+                    <TableCell>{transaction.account}</TableCell>
+                    <TableCell>{formatCurrency(transaction.amount)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {transaction.recurring ? "Recorrente" : "Manual"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => editTransaction(transaction)}>
+                          Editar
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" onClick={() => removeTransaction(transaction.id)}>
+                          <Trash2 />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <EmptyText text="Nenhuma transacao criada." />
+          )}
+        </CardContent>
+      </Card>
+
+      <Card ref={formRef}>
+        <CardHeader>
+          <CardTitle>{editId ? "Editar lancamento" : "Novo lancamento"}</CardTitle>
+          <CardDescription>Dados ficam salvos no navegador</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <Input placeholder="Descricao" value={description} onChange={(event) => setDescription(event.target.value)} />
+          <Input placeholder="Valor" value={amount} onChange={(event) => setAmount(event.target.value)} />
+          <Select value={kind} onValueChange={setKind}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="expense">Despesa</SelectItem>
+                <SelectItem value="income">Receita</SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger><SelectValue placeholder="Categoria" /></SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {state.categories.map((item) => (
+                  <SelectItem key={item} value={item}>{item}</SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Select value={account} onValueChange={setAccount}>
+            <SelectTrigger><SelectValue placeholder="Conta" /></SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {state.accounts.map((item) => (
+                  <SelectItem key={item.name} value={item.name}>{item.name}</SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <div className="flex items-center justify-between border p-3">
+            <span className="text-sm">Recorrente</span>
+            <Switch checked={recurring} onCheckedChange={setRecurring} />
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={saveTransaction}>Salvar</Button>
+            {editId ? <Button variant="outline" onClick={resetForm}>Cancelar</Button> : null}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function Budget({
+  state,
+  updateState,
+  totals,
+}: {
+  state: AppState
+  updateState: (patch: Partial<AppState>) => void
+  totals: { expense: number }
+}) {
+  return (
+    <div className="grid gap-5 xl:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <CardTitle>Orcamento</CardTitle>
+          <CardDescription>Limites editaveis por categoria</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {state.budgets.map((budget, index) => {
+            const used = Math.abs(
+              state.transactions
+                .filter((item) => item.category === budget.category && item.amount < 0)
+                .reduce((total, item) => total + item.amount, 0)
+            )
+            const percent = Math.round((used / Math.max(budget.limit, 1)) * 100)
+            return (
+              <div key={budget.category} className="flex flex-col gap-2 border p-3">
+                <div className="flex justify-between gap-3 text-sm">
+                  <span>{budget.category}</span>
+                  <span className="text-muted-foreground">{percent}%</span>
+                </div>
+                <Progress value={Math.min(percent, 100)} />
+                <div className="grid gap-2 md:grid-cols-2">
+                  <Input
+                    value={budget.limit}
+                    onChange={(event) => {
+                      const budgets = [...state.budgets]
+                      budgets[index] = { ...budget, limit: Number(event.target.value) }
+                      updateState({ budgets })
+                    }}
+                  />
+                  <Input
+                    value={budget.alert}
+                    onChange={(event) => {
+                      const budgets = [...state.budgets]
+                      budgets[index] = { ...budget, alert: Number(event.target.value) }
+                      updateState({ budgets })
+                    }}
+                  />
+                </div>
+              </div>
+            )
+          })}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Resumo</CardTitle>
+          <CardDescription>Gasto total no periodo</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-3xl font-semibold">{totals.expense.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function Goals({
+  state,
+  updateState,
+  formatCurrency,
+}: {
+  state: AppState
+  updateState: (patch: Partial<AppState>) => void
+  formatCurrency: (value: number) => string
+}) {
+  return (
+    <div className="grid gap-5 md:grid-cols-3">
+      {state.goals.map((goal, index) => {
+        const percent = Math.round((goal.current / Math.max(goal.target, 1)) * 100)
+        return (
+          <Card key={goal.name}>
+            <CardHeader>
+              <CardTitle>{goal.name}</CardTitle>
+              <CardDescription>{formatCurrency(goal.current)} / {formatCurrency(goal.target)}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <Progress value={Math.min(percent, 100)} />
+              <Input
+                value={goal.current}
+                onChange={(event) => {
+                  const goals = [...state.goals]
+                  goals[index] = { ...goal, current: Number(event.target.value) }
+                  updateState({ goals })
+                }}
+              />
+            </CardContent>
+          </Card>
+        )
+      })}
+    </div>
+  )
+}
+
+function Reports({
+  totals,
+  cashFlow,
+  formatCurrency,
+}: {
+  state: AppState
+  totals: { income: number; expense: number; balance: number }
+  categoryChart: { name: string; value: number; fill: string }[]
+  cashFlow: { day: string; income: number; expense: number; balance: number }[]
+  formatCurrency: (value: number) => string
+}) {
+  return (
+    <div className="grid gap-5 xl:grid-cols-[1fr_1fr]">
+      <Card>
+        <CardHeader>
+          <CardTitle>DRE pessoal</CardTitle>
+          <CardDescription>{formatCurrency(totals.income - totals.expense)} de resultado</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChartContainer config={chartConfig} className="h-[260px] w-full">
+            <BarChart data={cashFlow}>
+              <CartesianGrid vertical={false} />
+              <XAxis dataKey="day" tickLine={false} axisLine={false} />
+              <YAxis tickLine={false} axisLine={false} width={48} />
+              <ChartTooltip content={<ChartTooltipContent />} />
+              <Bar dataKey="income" fill="var(--color-income)" />
+              <Bar dataKey="expense" fill="var(--color-expense)" />
+            </BarChart>
+          </ChartContainer>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Exportacao</CardTitle>
+          <CardDescription>Preparado para PDF/Excel</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <Button variant="outline"><FileDown data-icon="inline-start" />Exportar PDF</Button>
+          <Button variant="outline"><FileDown data-icon="inline-start" />Exportar Excel</Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function Planning({ totals }: { totals: { income: number; expense: number } }) {
+  const surplus = totals.income - totals.expense
+  return (
+    <div className="grid gap-5 md:grid-cols-3">
+      {[
+        ["Sobra mensal", surplus],
+        ["Corte 10%", totals.expense * 0.1],
+        ["Sobra apos corte", surplus + totals.expense * 0.1],
+      ].map(([label, value]) => (
+        <Card key={label as string}>
+          <CardHeader>
+            <CardTitle>{label as string}</CardTitle>
+            <CardDescription>Simulador simples</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-semibold">{Number(value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+function Wealth({
+  state,
+  updateState,
+  formatCurrency,
+}: {
+  state: AppState
+  updateState: (patch: Partial<AppState>) => void
+  formatCurrency: (value: number) => string
+}) {
+  return (
+    <div className="grid gap-5 lg:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <CardTitle>Contas</CardTitle>
+          <CardDescription>Saldos editaveis</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {state.accounts.map((item, index) => (
+            <div key={item.name} className="grid gap-2 md:grid-cols-[1fr_160px]">
+              <Input
+                value={item.name}
+                onChange={(event) => {
+                  const accounts = [...state.accounts]
+                  accounts[index] = { ...item, name: event.target.value }
+                  updateState({ accounts })
+                }}
+              />
+              <Input
+                value={item.balance}
+                onChange={(event) => {
+                  const accounts = [...state.accounts]
+                  accounts[index] = { ...item, balance: Number(event.target.value) }
+                  updateState({ accounts })
+                }}
+              />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+      <SimpleCollection
+        title="Patrimonio"
+        description="Resumo de bens e dividas"
+        rows={[
+          ["Contas", formatCurrency(state.accounts.reduce((total, item) => total + item.balance, 0)), "", ""],
+          ["Bens", formatCurrency(state.assets.reduce((total, item) => total + item.value, 0)), "", ""],
+          ["Dividas", formatCurrency(state.debts.reduce((total, item) => total + item.value, 0)), "", ""],
+        ]}
+      />
+    </div>
+  )
+}
+
+function SettingsView({
+  state,
+  updateState,
+  newCategory,
+  newAccount,
+  setNewCategory,
+  setNewAccount,
+  addCategory,
+  addAccount,
+  resetAll,
+}: {
+  state: AppState
+  updateState: (patch: Partial<AppState>) => void
+  newCategory: string
+  newAccount: string
+  setNewCategory: (value: string) => void
+  setNewAccount: (value: string) => void
+  addCategory: () => void
+  addAccount: () => void
+  resetAll: () => void
+}) {
+  return (
+    <div className="grid gap-5 xl:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <CardTitle>Projeto</CardTitle>
+          <CardDescription>Personalizacao geral</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <Input value={state.projectName} onChange={(event) => updateState({ projectName: event.target.value })} />
+          <Input value={state.currentUser} onChange={(event) => updateState({ currentUser: event.target.value })} />
+          <Input placeholder="Email convidado" value={state.invitedEmail} onChange={(event) => updateState({ invitedEmail: event.target.value })} />
+          <div className="flex items-center justify-between border p-3">
+            <span className="text-sm">Notificacoes</span>
+            <Switch checked={state.notifications} onCheckedChange={(notifications) => updateState({ notifications })} />
+          </div>
+          <div className="flex items-center justify-between border p-3">
+            <span className="text-sm">Open Finance</span>
+            <Switch checked={state.openFinance} onCheckedChange={(openFinance) => updateState({ openFinance })} />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Dashboard</CardTitle>
+          <CardDescription>Cards visiveis</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {Object.entries(state.dashboardCards).map(([key, value]) => (
+            <div key={key} className="flex items-center justify-between border p-3">
+              <span className="text-sm">{key}</span>
+              <Switch
+                checked={value}
+                onCheckedChange={(checked) =>
+                  updateState({
+                    dashboardCards: { ...state.dashboardCards, [key]: checked },
+                  })
+                }
+              />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Categorias</CardTitle>
+          <CardDescription>Usadas em lancamentos e orcamento</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex gap-2">
+            <Input value={newCategory} onChange={(event) => setNewCategory(event.target.value)} placeholder="Nova categoria" />
+            <Button onClick={addCategory}>Adicionar</Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {state.categories.map((item) => (
+              <Badge key={item} variant="secondary">{item}</Badge>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Contas</CardTitle>
+          <CardDescription>Origem dos lancamentos</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex gap-2">
+            <Input value={newAccount} onChange={(event) => setNewAccount(event.target.value)} placeholder="Nova conta" />
+            <Button onClick={addAccount}>Adicionar</Button>
+          </div>
+          {state.accounts.map((item) => (
+            <Row key={item.name} label={item.name} value={String(item.balance)} />
+          ))}
+          <Separator />
+          <Button variant="destructive" onClick={resetAll}>Limpar dados locais</Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function SimpleCollection({
+  title,
+  description,
+  rows,
+}: {
+  title: string
+  description: string
+  rows: string[][]
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {rows.map((row) => (
+          <div key={row.join("-")} className="flex items-center justify-between gap-3 border p-3 text-sm">
+            <span>{row[0]}</span>
+            <span className="text-muted-foreground">{row.filter(Boolean).slice(1).join(" | ")}</span>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -844,9 +1150,7 @@ function Metric({
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         <CardTitle className="text-2xl">{value}</CardTitle>
-        <Badge variant="secondary" className="w-fit">
-          {delta}
-        </Badge>
+        <Badge variant="secondary" className="w-fit">{delta}</Badge>
       </CardContent>
     </Card>
   )
@@ -859,4 +1163,27 @@ function Row({ label, value }: { label: string; value: string }) {
       <span className="font-medium">{value}</span>
     </div>
   )
+}
+
+function EmptyText({ text }: { text: string }) {
+  return (
+    <div className="flex min-h-40 items-center justify-center border text-sm text-muted-foreground">
+      {text}
+    </div>
+  )
+}
+
+function alertCount(state: AppState) {
+  return state.budgets.filter((budget) => {
+    const used = Math.abs(
+      state.transactions
+        .filter((item) => item.category === budget.category && item.amount < 0)
+        .reduce((total, item) => total + item.amount, 0)
+    )
+    return used >= budget.limit * (budget.alert / 100)
+  }).length
+}
+
+function titleFor(section: Section) {
+  return navItems.find((item) => item[1] === section)?.[0] ?? "Economy"
 }
